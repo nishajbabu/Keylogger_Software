@@ -1,0 +1,122 @@
+import psutil
+import os
+import pefile
+import socket
+import hashlib
+import threading
+import time
+import logging
+
+# Set up logging
+logging.basicConfig(filename='keylogger_detector.log', level=logging.INFO)
+
+def detect_keylogger():
+    logging.info("Starting keylogger detection")
+    # Get a list of running processes
+    processes = psutil.process_iter()
+
+    # Iterate through the processes
+    for process in processes:
+        try:
+            # Get the process name and executable path
+            process_name = process.name()
+            executable_path = process.exe()
+
+            # Check if the process is a keylogger
+            if is_keylogger(executable_path):
+                logging.info(f"Keylogger detected: {process_name} ({executable_path})")
+                analyze_keylogger(executable_path)
+                block_keylogger_traffic()
+                incident_response()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+def is_keylogger(executable_path):
+    # Check if the executable path matches a known keylogger
+    known_keyloggers = ["C:\\Program Files\\Keylogger\\keylogger.exe", "/usr/bin/keylogger"]
+    if executable_path in known_keyloggers:
+        return True
+
+    # Check if the executable has suspicious characteristics
+    pe = pefile.PE(executable_path)
+    if pe.FILE_HEADER.Characteristics & 0x0002:  # Check for executable flag
+        return True
+
+    return False
+
+def analyze_keylogger(executable_path):
+    logging.info("Analyzing keylogger")
+    # Open the executable file
+    pe = pefile.PE(executable_path)
+
+    # Get the import table
+    import_table = pe.DIRECTORY_ENTRY_IMPORT
+
+    # Check for suspicious imports
+    for entry in import_table:
+        if entry.dll.decode('utf-8') == 'user32.dll':
+            logging.info("Keylogger imports user32.dll, possible keyboard hooking")
+
+    # Analyze network traffic
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("example.com", 80))
+    sock.send(b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+    response = sock.recv(1024)
+    logging.info("Keylogger communicates with example.com:", response.decode('utf-8'))
+
+def block_keylogger_traffic():
+    logging.info("Blocking keylogger traffic")
+    # Block traffic to known command and control servers
+    block_list = ["example.com", "badguy.net"]
+    for host in block_list:
+        os.system(f"iptables -A OUTPUT -d {host} -j DROP")
+
+    # Block suspicious traffic patterns
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("0.0.0.0", 80))
+    sock.listen(1)
+    conn, addr = sock.accept()
+    data = conn.recv(1024)
+    if b"GET /keylogger" in data:
+        logging.info("Blocking suspicious traffic from", addr)
+        conn.close()
+
+def incident_response():
+    logging.info("Incident response activated")
+    # Contain the incident
+    os.system("iptables -A INPUT -s 0.0.0.0/0 -j DROP")
+
+    # Notify the incident response team
+    logging.info("Keylogger incident detected, notifying team...")
+
+def secure_software_development():
+    logging.info("Implementing secure software development practices")
+    # Implement secure coding practices
+    code = """
+    # Secure coding example
+    def secure_function():
+        password = input("Enter password: ")
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        print("Hashed password:", hashed_password)
+    """
+    with open("secure_software.py", "w") as f:
+        f.write(code)
+
+def monitor_system():
+    logging.info("Monitoring system for keylogger activity")
+    while True:
+        detect_keylogger()
+        time.sleep(60)  # Check every 60 seconds
+
+def main():
+    logging.info("Starting keylogger detector")
+    # Create a thread to monitor the system
+    thread = threading.Thread(target=monitor_system)
+    thread.daemon = True
+    thread.start()
+
+    # Run the secure software development script
+    secure_software_development()
+
+if __name__ == "__main__":
+    main()
